@@ -1,0 +1,64 @@
+name: Build Fast Client APK
+
+on:
+workflow_dispatch:
+
+jobs:
+build:
+runs-on: ubuntu-latest
+
+steps:
+  - name: Checkout
+    uses: actions/checkout@v4
+
+  - name: Extract Android Project
+    run: unzip -o FastClient-Source.zip -d .
+
+  - name: Setup Java
+    uses: actions/setup-java@v4
+    with:
+      distribution: temurin
+      java-version: '21'
+
+  - name: Setup Android SDK
+    uses: android-actions/setup-android@v3
+    with:
+      packages: platform-tools
+
+  - name: Install Build Tools
+    run: |
+      yes | sdkmanager --licenses || true
+      sdkmanager "build-tools;35.0.0"
+
+  - name: Setup Xmake
+    uses: xmake-io/github-action-setup-xmake@v1
+    with:
+      xmake-version: '2.9.9'
+
+  - name: Setup NDK
+    uses: nttld/setup-ndk@v1
+    with:
+      ndk-version: r28c
+      link-to-sdk: true
+
+  - name: Prepare Firebase
+    run: |
+      mkdir -p app
+      echo '{"project_info":{"project_number":"000000000000","project_id":"ci-placeholder","storage_bucket":"ci-placeholder.appspot.com"},"client":[{"client_info":{"mobilesdk_app_id":"1:000000000000:android:0000000000000000000000","android_client_info":{"package_name":"org.levimc.launcher"}},"oauth_client":[],"api_key":[{"current_key":"placeholder"}],"services":{"appinvite_service":{"other_platform_oauth_client":[]}}}],"configuration_version":"1"}' > app/google-services.json
+
+  - name: Fetch Native Dependencies
+    run: |
+      git clone --depth 1 --recursive https://github.com/LiteLDev/preloader-android app/src/main/cpp/preloader
+      git clone --depth 1 --recursive https://github.com/microsoft/libHttpClient app/src/main/cpp/libHttpClient
+
+  - name: Build APK
+    run: |
+      echo "curseforge.api_key=" >> local.properties
+      chmod +x gradlew
+      ./gradlew assembleDebug --stacktrace
+
+  - name: Upload APK
+    uses: actions/upload-artifact@v4
+    with:
+      name: FastClient-APK
+      path: app/build/outputs/apk/debug/*.apk
