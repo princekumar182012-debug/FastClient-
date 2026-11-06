@@ -1,59 +1,48 @@
 name: Build Fast Client APK
-
-on:
-  workflow_dispatch:
-
+on: workflow_dispatch
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Extract Project
-        run: unzip -o FastClient-Source.zip -x '.github/*' -d .
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v4
+      - name: Extract project
+        run: |
+          ZIP=$(ls -S *.zip | head -n1)
+          echo "Using: $ZIP"
+          unzip -o "$ZIP" -x '.github/*' -d .
+      - name: Fetch native submodules
+        run: |
+          if [ -z "$(ls -A app/src/main/cpp/preloader 2>/dev/null)" ]; then
+            rm -rf app/src/main/cpp/preloader
+            git clone --depth 1 --recursive https://github.com/LiteLDev/preloader-android app/src/main/cpp/preloader
+          fi
+          if [ -z "$(ls -A app/src/main/cpp/libHttpClient 2>/dev/null)" ]; then
+            rm -rf app/src/main/cpp/libHttpClient
+            git clone --depth 1 --recursive https://github.com/microsoft/libHttpClient app/src/main/cpp/libHttpClient
+          fi
+      - name: Firebase placeholder
+        run: |
+          echo '{"project_info":{"project_number":"000000000000","project_id":"ci-placeholder","storage_bucket":"ci-placeholder.appspot.com"},"client":[{"client_info":{"mobilesdk_app_id":"1:000000000000:android:0000000000000000000000","android_client_info":{"package_name":"org.levimc.launcher"}},"oauth_client":[],"api_key":[{"current_key":"AIzaSyCIOnlyPlaceholderKey"}],"services":{"appinvite_service":{"other_platform_oauth_client":[]}}}],"configuration_version":"1"}' > app/google-services.json
+      - uses: actions/setup-java@v4
         with:
+          java-version: "21"
           distribution: temurin
-          java-version: '21'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v3
+      - run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "build-tools;35.0.0"
+      - uses: xmake-io/github-action-setup-xmake@v1
         with:
-          packages: platform-tools platforms;android-36 build-tools;36.0.0
-
-      - name: Setup Xmake
-        uses: xmake-io/github-action-setup-xmake@v1
-        with:
-          xmake-version: '2.9.9'
-
-      - name: Setup NDK
-        uses: nttld/setup-ndk@v1
+          xmake-version: "2.9.9"
+      - uses: nttld/setup-ndk@v1
         with:
           ndk-version: r28c
           link-to-sdk: true
-
-      - name: Install Native Dependencies
-        run: |
-          git clone --depth 1 --recursive https://github.com/LiteLDev/preloader-android app/src/main/cpp/preloader
-          git clone --depth 1 --recursive https://github.com/microsoft/libHttpClient app/src/main/cpp/libHttpClient
-
-      - name: Prepare Firebase
-        run: |
-          mkdir -p app
-          echo '{"project_info":{"project_number":"000000000000","project_id":"ci-placeholder","storage_bucket":"ci-placeholder.appspot.com"},"client":[{"client_info":{"mobilesdk_app_id":"1:000000000000:android:0000000000000000000000","android_client_info":{"package_name":"org.levimc.launcher"}},"oauth_client":[],"api_key":[{"current_key":"placeholder"}],"services":{"appinvite_service":{"other_platform_oauth_client":[]}}}],"configuration_version":"1"}' > app/google-services.json
-
-      - name: Build APK
-        run: |
+      - run: |
           echo "curseforge.api_key=" >> local.properties
-          chmod +x gradlew
+          chmod +x ./gradlew
           ./gradlew assembleDebug --stacktrace
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: FastClient-APK
+          name: Fast-Client-apk
           path: app/build/outputs/apk/debug/*.apk
